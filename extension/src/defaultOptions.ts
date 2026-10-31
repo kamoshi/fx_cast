@@ -102,7 +102,10 @@ export default {
     receiverSelectorShowMediaImages: false,
 
     siteWhitelistEnabled: true,
-    siteWhitelist: [{ pattern: "https://www.netflix.com/*", isEnabled: true }],
+    siteWhitelist: [
+        { pattern: "https://www.netflix.com/*", isEnabled: true },
+        { pattern: "https://www.youtube.com/*", isEnabled: true }
+    ],
     siteWhitelistCustomUserAgent: "",
 
     showAdvancedOptions: false

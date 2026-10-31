@@ -130,12 +130,24 @@ export default new (class extends TypedEventTarget<EventMap> {
      * storage are set. Does not override any existing options.
      */
     public async update(defaults = defaultOptions): Promise<void> {
-        const newOpts = await this.getAll();
+        const newOpts = (await this.getAll()) ?? ({} as Options);
 
         // Find options not already in storage
         for (const [optName, optVal] of Object.entries(defaults)) {
             if (!newOpts.hasOwnProperty(optName)) {
                 newOpts[optName] = optVal;
+            }
+        }
+
+        // Add newly introduced default whitelist entries to existing
+        // installations without replacing their configured entries.
+        for (const defaultItem of defaults.siteWhitelist) {
+            if (
+                !newOpts.siteWhitelist.some(
+                    item => item.pattern === defaultItem.pattern
+                )
+            ) {
+                newOpts.siteWhitelist.push(defaultItem);
             }
         }
 

@@ -18,9 +18,11 @@ export const CAST_EXTENSION_SENDER_SCRIPT_URLS = [
  * implementation.
  */
 export const CAST_SDK_SCRIPT_URL =
-    "https://www.gstatic.com/eureka/clank/cast_sender.js";
+    "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js";
 
 export const CAST_SDK_SCRIPT_URL_PATTERNS = [
+    "*://*.gstatic.com/*cast_sender.js*",
+    "*://www.gstatic.com/cv/js/sender/v1/cast_sender.js",
     "*://www.gstatic.com/eureka/clank/*/cast_sender.js",
     "*://www.gstatic.com/eureka/clank/cast_sender.js"
 ];

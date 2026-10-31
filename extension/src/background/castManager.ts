@@ -412,6 +412,13 @@ const castManager = new (class {
 
         activeInstances.add(instance);
 
+        logger.info("Cast sender connected", {
+            tabId: instance.contentContext?.tabId,
+            frameId: instance.contentContext?.frameId,
+            origin: instance.contentContext?.origin,
+            isTrusted: instance.isTrusted
+        });
+
         instance.contentPort.postMessage({
             subject: "cast:instanceCreated",
             data: { isAvailable: (await bridge.getInfo()).isVersionCompatible }
@@ -467,6 +474,12 @@ const castManager = new (class {
         }
 
         const instance = await createCastInstance({ contentPort, isTrusted });
+
+        logger.info("Cast content port connected", {
+            tabId: contentPort.sender.tab.id,
+            frameId: contentPort.sender.frameId,
+            url: contentPort.sender.url
+        });
 
         // cast instance -> (any)
         const onContentPortMessage = (message: Message) => {
@@ -592,6 +605,12 @@ async function handleContentMessage(instance: CastInstance, message: Message) {
     switch (message.subject) {
         case "main:initializeCastSdk": {
             instance.apiConfig = message.data.apiConfig;
+            logger.info("Cast SDK initialized by page", {
+                tabId: instance.contentContext?.tabId,
+                frameId: instance.contentContext?.frameId,
+                appId: instance.apiConfig.sessionRequest.appId,
+                capabilities: instance.apiConfig.sessionRequest.capabilities
+            });
             instance.contentPort.postMessage({
                 subject: "cast:receiverAvailabilityUpdated",
                 data: {
@@ -951,6 +970,18 @@ async function getReceiverSelection(selectionOpts: {
     if (!opts.mirroringEnabled) {
         availableMediaTypes &= ~ReceiverSelectorMediaType.Screen;
     }
+
+    logger.info("Preparing receiver selector", {
+        tabId: selectionOpts.tabId,
+        frameId: selectionOpts.frameId,
+        pageUrl: pageInfo?.url,
+        hasCastInstance: !!selectionOpts.castInstance,
+        hasSessionRequest: !!selectionOpts.castInstance?.apiConfig,
+        appId: appInfo?.sessionRequest.appId,
+        mirroringEnabled: opts.mirroringEnabled,
+        availableMediaTypes,
+        receiverCount: deviceManager.getDevices().length
+    });
 
     // Ensure status manager is initialized
     await deviceManager.init();

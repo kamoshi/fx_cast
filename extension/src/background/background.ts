@@ -33,8 +33,8 @@ browser.runtime.onInstalled.addListener(async details => {
         }
 
         case "update": {
-            // Set new defaults
-            await options.update(defaultOptions);
+            // Initialize after ensuring any new defaults are applied.
+            await init();
             break;
         }
     }
@@ -109,11 +109,26 @@ async function cacheBaseConfig() {
 }
 
 let isInitialized = false;
+let initPromise: Promise<void> | undefined;
 
-async function init() {
+function init() {
     if (isInitialized) {
-        return;
+        return Promise.resolve();
     }
+
+    if (!initPromise) {
+        initPromise = initialize().finally(() => {
+            initPromise = undefined;
+        });
+    }
+
+    return initPromise;
+}
+
+async function initialize() {
+    // Apply new defaults on every startup as well as on version changes.
+    // This also covers development builds reloaded without a version bump.
+    await options.update(defaultOptions);
 
     /**
      * If options haven't been set yet, we can't properly initialize,

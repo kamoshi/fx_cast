@@ -9,6 +9,7 @@ import type Session from "../sdk/Session";
 import type Media from "../sdk/media/Media";
 
 import cast, { ensureInit, type CastPort } from "../export";
+import { getRezkaMediaSource } from "../sites/rezka";
 
 const logger = new Logger("fx_cast [media sender]");
 
@@ -116,8 +117,14 @@ export default class MediaSender {
     }
 
     private async loadMedia() {
-        let mediaUrl = new URL(this.mediaUrl);
-        const mediaTitle = mediaUrl.pathname.slice(1);
+        const siteMediaSource = getRezkaMediaSource(
+            this.mediaElement,
+            this.mediaUrl,
+            document.title
+        );
+
+        let mediaUrl = new URL(siteMediaSource?.url ?? this.mediaUrl);
+        const mediaTitle = siteMediaSource?.title ?? mediaUrl.pathname.slice(1);
         const subtitleUrls: URL[] = [];
 
         if (this.isLocalMedia) {
@@ -136,7 +143,10 @@ export default class MediaSender {
             }
         }
 
-        const mediaInfo = new cast.media.MediaInfo(mediaUrl.href, "");
+        const mediaInfo = new cast.media.MediaInfo(
+            mediaUrl.href,
+            siteMediaSource?.contentType ?? ""
+        );
         mediaInfo.metadata = new cast.media.GenericMediaMetadata();
         mediaInfo.metadata.title = mediaTitle;
         mediaInfo.tracks = [];

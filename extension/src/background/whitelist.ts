@@ -113,13 +113,24 @@ async function onWhitelistedBeforeSendHeaders(
         );
     }
 
-    const host = details.requestHeaders.find(header => header.name === "Host");
+    const host = new URL(details.url).hostname;
+    const userAgent = getUserAgent(details.url, host);
+    let didSetUserAgent = false;
 
     for (const header of details.requestHeaders) {
         if (header.name === "User-Agent") {
-            header.value = getUserAgent(details.url, host?.value);
+            header.value = userAgent;
+            didSetUserAgent = true;
             break;
         }
+    }
+
+    if (details.type === "main_frame" && host === "www.youtube.com") {
+        logger.info("Applying YouTube user-agent override", {
+            url: details.url,
+            userAgent,
+            didSetUserAgent
+        });
     }
 
     return {
@@ -149,10 +160,8 @@ function onWhitelistedChildBeforeSendHeaders(
         const requestHeaders = details.requestHeaders;
         for (const header of requestHeaders) {
             if (header.name === "User-Agent") {
-                const host = requestHeaders.find(
-                    header => header.name === "Host"
-                );
-                header.value = getUserAgent(details.url, host?.value);
+                const host = new URL(details.url).hostname;
+                header.value = getUserAgent(details.url, host);
                 break;
             }
         }
@@ -167,6 +176,11 @@ function onWhitelistedChildBeforeSendHeaders(
  */
 async function onBeforeCastSDKRequest(details: OnBeforeRequestDetails) {
     if (!details.originUrl || details.tabId === -1) {
+        logger.info("Cast SDK request ignored: missing origin or tab", {
+            tabId: details.tabId,
+            frameId: details.frameId,
+            originUrl: details.originUrl
+        });
         return {};
     }
 
@@ -182,14 +196,42 @@ async function onBeforeCastSDKRequest(details: OnBeforeRequestDetails) {
         ];
 
         // Allow request if no whitelist matches
-        if (
-            !urls.some(url =>
-                matchPatterns.some(pattern => pattern.matches(url))
-            )
-        ) {
+        const isWhitelisted = urls.some(url =>
+            matchPatterns.some(pattern => pattern.matches(url))
+        );
+        if (!isWhitelisted) {
+            logger.info("Cast SDK request not redirected: origin not whitelisted", {
+                tabId: details.tabId,
+                frameId: details.frameId,
+                originUrl: details.originUrl,
+                frameAncestors: details.frameAncestors?.map(item => item.url)
+            });
             return {};
         }
     }
+
+    /**
+     * The Cast Framework loader builds on top of the Base API shim. Let
+     * Google's loader fetch the framework, then intercept its lower-level
+     * cast_sender.js request separately.
+     */
+    const requestUrl = new URL(details.url);
+    if (requestUrl.searchParams.get("loadCastFramework") === "1") {
+        logger.info("Allowing Google Cast Framework loader", {
+            tabId: details.tabId,
+            frameId: details.frameId,
+            originUrl: details.originUrl,
+            requestUrl: details.url
+        });
+        return {};
+    }
+
+    logger.info("Redirecting Cast SDK request to extension sender", {
+        tabId: details.tabId,
+        frameId: details.frameId,
+        originUrl: details.originUrl,
+        requestUrl: details.url
+    });
 
     await browser.scripting.executeScript({
         target: { tabId: details.tabId, frameIds: [details.frameId] },
@@ -207,6 +249,14 @@ async function registerSiteWhitelist() {
     siteWhitelist = opts.siteWhitelist;
     siteWhitelistEnabled = opts.siteWhitelistEnabled;
 
+    logger.info("Registering site whitelist", {
+        enabled: siteWhitelistEnabled,
+        patterns: siteWhitelist.map(item => ({
+            pattern: item.pattern,
+            enabled: item.isEnabled
+        }))
+    });
+
     // Parse match patterns once
     matchPatterns = siteWhitelist.map(
         item => new RemoteMatchPattern(item.pattern)
@@ -220,6 +270,7 @@ async function registerSiteWhitelist() {
 
     // Skip whitelist request listeners if disabled or empty
     if (!siteWhitelistEnabled || !siteWhitelist.length) {
+        logger.info("Whitelist content scripts and user-agent overrides disabled");
         return;
     }
 
@@ -256,6 +307,9 @@ async function registerSiteWhitelist() {
             allFrames: true
         }
     ]);
+    logger.info("Whitelist content script registered", {
+        patterns: siteWhitelist.map(item => item.pattern)
+    });
 }
 
 async function unregisterSiteWhitelist() {
